@@ -1,0 +1,31 @@
+{
+    "name": "bolt/requirements",
+    "description": "Requirement definitions for Bolt projects.",
+    "keywords": [
+        "bolt",
+        "cms"
+    ],
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Gawain Lynch",
+            "email": "gawain.lynch@gmail.com"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "Bolt\\Requirement\\": "src"
+        }
+    },
+    "require": {
+        "php": "^5.5 || ^7.0",
+        "symfony/requirements-checker": "^1.0"
+    },
+    "require-dev": {
+    },
+    "extra": {
+        "branch-alias": {
+            "dev-master": "1.0-dev"
+        }
+    }
+}
