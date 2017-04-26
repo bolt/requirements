@@ -18,8 +18,8 @@ use Symfony\Requirements\RequirementCollection;
  */
 class BoltRequirements extends RequirementCollection
 {
-    const LEGACY_REQUIRED_PHP_VERSION = '5.3.3';
-    const REQUIRED_PHP_VERSION = '5.5.9';
+    const LEGACY_REQUIRED_PHP_VERSION = '5.5.9';
+    const REQUIRED_PHP_VERSION = '7.0.0';
 
     /** @var string */
     protected $checkPath;
@@ -427,11 +427,12 @@ class BoltRequirements extends RequirementCollection
         $composerLock = json_decode(file_get_contents($path), true);
         foreach ($composerLock['packages'] as $package) {
             $name = $package['name'];
-            if ('bolt/bolt' !== $name && 'symfony/debug' !== $name) {
-                continue;
+            if ('bolt/bolt' === $name) {
+                return (int) $package['version'][1] > 3 ? self::REQUIRED_PHP_VERSION : self::LEGACY_REQUIRED_PHP_VERSION;
             }
-
-            return (int) $package['version'][1] > 2 ? self::REQUIRED_PHP_VERSION : self::LEGACY_REQUIRED_PHP_VERSION;
+            if ('symfony/debug' !== $name) {
+                return (int) $package['version'][1] > 2 ? self::REQUIRED_PHP_VERSION : self::LEGACY_REQUIRED_PHP_VERSION;
+            }
         }
 
         return false;
