@@ -3,6 +3,7 @@
 namespace Bolt\Requirement;
 
 use Collator;
+use Composer\CaBundle\CaBundle;
 use DateTimeZone;
 use PDO;
 use ReflectionExtension;
@@ -243,6 +244,14 @@ class BoltRequirements extends RequirementCollection
         if (file_exists($this->checkPath . '/vendor/composer')) {
             require_once $this->checkPath . '/vendor/autoload.php';
         }
+
+        $this->addRecommendation(
+            !empty(CaBundle::getSystemCaRootBundlePath()),
+            'System TLS/SSL CA root bundle should be installed',
+            'Some vendor libraries will attempt to use fallbacks, but will only be updated via running <code>composer update</code>' . PHP_EOL . PHP_EOL .
+            'It is strongly recommended you, or your hosting provider, correctly sets up a system-wide TLS/SSL CA root bundle' . PHP_EOL . PHP_EOL .
+            'See https://docs.bolt.cm/howto/curl-ca-certificates for more information.'
+        );
 
         if (null !== $pcreVersion) {
             $this->addRecommendation(

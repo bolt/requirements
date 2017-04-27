@@ -19,6 +19,7 @@
     },
     "require": {
         "php": "^5.5 || ^7.0",
+        "composer/ca-bundle": "^1.0",
         "symfony/requirements-checker": "^1.0"
     },
     "require-dev": {
