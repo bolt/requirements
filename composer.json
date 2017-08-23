@@ -1,8 +1,10 @@
 {
     "name": "bolt/requirements",
     "description": "Requirement definitions for Bolt projects.",
+    "type": "library",
     "keywords": [
         "bolt",
+        "configuration",
         "cms"
     ],
     "license": "MIT",
@@ -18,12 +20,13 @@
         }
     },
     "require": {
-        "php": "^5.5 || ^7.0",
+        "php": "^5.5.9 || ^7.0",
         "composer/ca-bundle": "^1.0",
         "symfony/requirements-checker": "^1.0"
     },
-    "require-dev": {
-    },
+    "bin": [
+        "bin/bolt-requirements"
+    ],
     "extra": {
         "branch-alias": {
             "dev-master": "1.0-dev"
