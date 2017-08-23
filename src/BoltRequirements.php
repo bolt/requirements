@@ -2,12 +2,18 @@
 
 namespace Bolt\Requirement;
 
+use Bolt\Configuration\PathResolver;
+use Bolt\Exception\PathResolutionException;
+use Bolt\Version;
 use Collator;
 use Composer\CaBundle\CaBundle;
 use DateTimeZone;
 use PDO;
 use ReflectionExtension;
+use Silex\Application;
+use Symfony\Component\Yaml\Yaml;
 use Symfony\Requirements\RequirementCollection;
+use Webmozart\PathUtil\Path;
 
 /**
  * This class specifies all requirements and optional recommendations that
@@ -17,14 +23,12 @@ use Symfony\Requirements\RequirementCollection;
  * @author Fabien Potencier <fabien@symfony.com>
  * @author Gawain Lynch <gawain.lynch@gmail.com>
  */
-class BoltRequirements extends RequirementCollection
+final class BoltRequirements extends RequirementCollection
 {
     const LEGACY_REQUIRED_PHP_VERSION = '5.5.9';
-    const REQUIRED_PHP_VERSION = '7.0.0';
+    const REQUIRED_PHP_VERSION = '7.0.8';
 
     /** @var string */
-    protected $checkPath;
-    /** @var null */
     private $boltVersion;
 
     /**
@@ -35,36 +39,35 @@ class BoltRequirements extends RequirementCollection
      */
     public function __construct($checkPath = __DIR__, $boltVersion = null)
     {
-        $this->checkPath = $checkPath;
         if ($boltVersion === null) {
-            if (!class_exists('Bolt\Version', true)) {
+            if (!class_exists(Version::class, true)) {
                 throw new \BadMethodCallException(sprintf(
-                    '%s requires either \Bolt\Version to be loadable, or a SemVer version string passed as the second ' .
-                    'contructor parameter, e.g. "1.2.3"',
-                    __CLASS__
+                    '%s requires either %s to be loadable, or a SemVer string passed as the second constructor parameter, e.g. "1.2.3"',
+                    __CLASS__,
+                    Version::class
                 ));
             }
-            $this->boltVersion = \Bolt\Version::forComposer();
+            $this->boltVersion = Version::forComposer();
         }
 
-        $this->setRequirements();
+        $paths = $this->determinePaths($checkPath);
+        if (file_exists($paths['site'] . '/vendor/composer')) {
+            require_once $paths['site'] . '/vendor/autoload.php';
+        }
+
+        $this->setRequirements($paths);
         $this->setRecommendations();
     }
 
     /**
-     * Mandatory requirements
+     * Mandatory requirements.
+     *
+     * @param array $paths
      */
-    protected function setRequirements()
+    protected function setRequirements(array $paths)
     {
         $installedPhpVersion = phpversion();
-        $requiredPhpVersion = $this->getPhpRequiredVersion();
-
-        $this->addRecommendation(
-            $requiredPhpVersion,
-            'Vendors should be installed in order to check all requirements.',
-            'Run the <code>composer install</code> command.',
-            'Run the "composer install" command.'
-        );
+        $requiredPhpVersion = $this->getPhpRequiredVersion($paths);
 
         if (false !== $requiredPhpVersion) {
             $this->addRequirement(
@@ -81,22 +84,20 @@ class BoltRequirements extends RequirementCollection
         }
 
         $this->addRequirement(
-            is_dir($this->checkPath . '/vendor/composer'),
+            is_dir($paths['site'] . '/vendor/composer'),
             'Vendor libraries must be installed',
             'Vendor libraries are missing. Install composer following instructions from <a href="http://getcomposer.org/">http://getcomposer.org/</a>. ' .
             'Then run "<strong>php composer.phar install</strong>" to install them.'
         );
 
-        $cacheDir = version_compare($this->boltVersion, '3.99999', '>') ? 'var/cache/' : 'app/cache/';
-
         $this->addRequirement(
-            is_writable($this->checkPath . DIRECTORY_SEPARATOR . $cacheDir),
-            sprintf('%s directory must be writable', $cacheDir),
-            sprintf('Change the permissions of "<strong>%s</strong>" directory so that the web server can write into it.', $cacheDir)
+            is_writable($paths['cache']),
+            sprintf('%s directory must be writable', $paths['cache']),
+            sprintf('Change the permissions of "<strong>%s</strong>" directory so that the web server can write into it.', $paths['cache'])
         );
 /*
         $this->addRequirement(
-            is_writable($this->checkPath . '/var/logs'),
+            is_writable($paths['logs']),
             'app/logs/ or var/logs/ directory must be writable',
             'Change the permissions of either "<strong>app/logs/</strong>" or  "<strong>var/logs/</strong>" directory so that the web server can write into it.'
         );
@@ -194,17 +195,9 @@ class BoltRequirements extends RequirementCollection
         }
 
         if (extension_loaded('xdebug')) {
-            $this->addPhpConfigRequirement(
-                'xdebug.show_exception_trace',
-                false,
-                true
-            );
+            $this->addPhpConfigRequirement('xdebug.show_exception_trace', false, true);
 
-            $this->addPhpConfigRequirement(
-                'xdebug.scream',
-                false,
-                true
-            );
+            $this->addPhpConfigRequirement('xdebug.scream', false, true);
 
             $this->addPhpConfigRecommendation(
                 'xdebug.max_nesting_level',
@@ -235,16 +228,10 @@ class BoltRequirements extends RequirementCollection
     }
 
     /**
-     * Optional recommendations
+     * Optional recommendations.
      */
     protected function setRecommendations()
     {
-        $pcreVersion = defined('PCRE_VERSION') ? (float) PCRE_VERSION : null;
-
-        if (file_exists($this->checkPath . '/vendor/composer')) {
-            require_once $this->checkPath . '/vendor/autoload.php';
-        }
-
         $this->addRecommendation(
             !empty(CaBundle::getSystemCaRootBundlePath()),
             'System TLS/SSL CA root bundle should be installed',
@@ -253,6 +240,7 @@ class BoltRequirements extends RequirementCollection
             'See https://docs.bolt.cm/howto/curl-ca-certificates for more information.'
         );
 
+        $pcreVersion = defined('PCRE_VERSION') ? (float) PCRE_VERSION : null;
         if (null !== $pcreVersion) {
             $this->addRecommendation(
                 $pcreVersion >= 8.0,
@@ -358,7 +346,7 @@ class BoltRequirements extends RequirementCollection
 
         $this->addRecommendation(
             $accelerator,
-            'a PHP accelerator should be installed',
+            'A PHP accelerator should be installed for optimum performance',
             'Install and/or enable a <strong>PHP accelerator</strong> (highly recommended).'
         );
 
@@ -427,9 +415,9 @@ class BoltRequirements extends RequirementCollection
      *
      * @return string|false The PHP required version or false if it could not be guessed
      */
-    protected function getPhpRequiredVersion()
+    protected function getPhpRequiredVersion(array $paths)
     {
-        if (!file_exists($path = $this->checkPath . '/composer.lock')) {
+        if (!file_exists($path = $paths['site'] . '/composer.lock')) {
             return false;
         }
 
@@ -439,11 +427,89 @@ class BoltRequirements extends RequirementCollection
             if ('bolt/bolt' === $name) {
                 return (int) $package['version'][1] > 3 ? self::REQUIRED_PHP_VERSION : self::LEGACY_REQUIRED_PHP_VERSION;
             }
-            if ('symfony/debug' !== $name) {
-                return (int) $package['version'][1] > 2 ? self::REQUIRED_PHP_VERSION : self::LEGACY_REQUIRED_PHP_VERSION;
-            }
         }
 
         return false;
+    }
+
+    /**
+     * @param string $checkPath
+     *
+     * @return array
+     */
+    private function determinePaths($checkPath)
+    {
+        $rootPath = $this->getRootDir($checkPath);
+
+        $cacheDir = version_compare($this->boltVersion, '3.99999', '>')
+            ? $rootPath . '/var/cache'
+            : $rootPath . '/app/cache'
+        ;
+        $paths = [
+            'site'              => $rootPath,
+            'app'               => $rootPath . '/app',
+            'cache'             => $cacheDir,
+            'config'            => $rootPath . '/app/config',
+            'database'          => $rootPath . '/app/database',
+            'extensions'        => $rootPath . '/extensions',
+            'extensions_config' => $rootPath . '/app/config/extensions',
+            'var'               => $rootPath . '/var',
+            'web'               => $rootPath . '/public',
+            'files'             => $rootPath . '/public/files',
+            'themes'            => $rootPath . '/public/theme',
+            'bolt_assets'       => $rootPath . '/public/bolt-public',
+        ];
+
+        // Doesn't seem to have Bolt installed
+        if (!class_exists(PathResolver::class) || !class_exists(Path::class)) {
+            return $paths;
+        }
+        $rootPath = Path::canonicalize($rootPath);
+        $config['paths'] = [];
+
+        // Read in .bolt.yml or .bolt.php
+        if (file_exists($rootPath . '/.bolt.yml')) {
+            $yaml = Yaml::parse(file_get_contents($rootPath . '/.bolt.yml')) ?: [];
+            $config = array_replace_recursive($config['paths'], $yaml);
+        } elseif (file_exists($rootPath . '/.bolt.php')) {
+            $php = include $rootPath . '/.bolt.php';
+        } else {
+            return $paths;
+        }
+        if (isset($php) && is_array($php)) {
+            $config = array_replace_recursive($config['paths'], $php);
+        } elseif (isset($php) && $php instanceof Application) {
+            return $paths;
+        }
+
+        // Resolve paths
+        $resolver = new PathResolver($rootPath, $config['paths']);
+        foreach (array_keys($paths) as $key) {
+            try {
+                $paths[$key] = $resolver->resolve("%$key%");
+            } catch (PathResolutionException $e) {
+                // Keep moving
+            }
+        }
+
+        return $paths;
+    }
+
+    /**
+     * @param string $checkPath
+     *
+     * @return string
+     */
+    private function getRootDir($checkPath)
+    {
+        $dir = $checkPath;
+        while (!file_exists($dir . '/composer.json')) {
+            if ($dir === dirname($dir)) {
+                break;
+            }
+            $dir = dirname($dir);
+        }
+
+        return $dir;
     }
 }
