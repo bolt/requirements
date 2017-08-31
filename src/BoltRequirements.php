@@ -470,14 +470,14 @@ final class BoltRequirements extends RequirementCollection
         // Read in .bolt.yml or .bolt.php
         if (file_exists($rootPath . '/.bolt.yml')) {
             $yaml = Yaml::parse(file_get_contents($rootPath . '/.bolt.yml')) ?: [];
-            $config = array_replace_recursive($config['paths'], $yaml);
+            $config = array_replace_recursive($config, $yaml);
         } elseif (file_exists($rootPath . '/.bolt.php')) {
             $php = include $rootPath . '/.bolt.php';
         } else {
             return $paths;
         }
         if (isset($php) && is_array($php)) {
-            $config = array_replace_recursive($config['paths'], $php);
+            $config = array_replace_recursive($config, $php);
         } elseif (isset($php) && $php instanceof Application) {
             return $paths;
         }
