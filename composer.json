@@ -21,6 +21,7 @@
     },
     "require": {
         "php": "^5.5.9 || ^7.0",
+        "bolt/common": "^1.1",
         "composer/ca-bundle": "^1.0",
         "symfony/requirements-checker": "^1.0"
     },

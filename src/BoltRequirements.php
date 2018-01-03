@@ -3,6 +3,7 @@
 namespace Bolt\Requirement;
 
 use Bolt\Bootstrap;
+use Bolt\Common\Ini;
 use Bolt\Configuration\PathResolver;
 use Bolt\Version;
 use Collator;
@@ -150,7 +151,7 @@ final class BoltRequirements extends RequirementCollection
         $this->addExtensionRequirement('Tokenizer', 'token_get_all');
         $this->addExtensionRequirement('SimpleXML', 'simplexml_import_dom');
 
-        if (function_exists('apc_store') && ini_get('apc.enabled')) {
+        if (function_exists('apc_store') && Ini::getBool('apc.enabled')) {
             $this->addRequirement(
                 version_compare(phpversion('apc'), '3.1.13', '>='),
                 'APC version must be at least 3.1.13',
@@ -316,17 +317,17 @@ final class BoltRequirements extends RequirementCollection
         }
 
         $accelerator =
-            (extension_loaded('eaccelerator') && ini_get('eaccelerator.enable'))
+            (extension_loaded('eaccelerator') && Ini::getBool('eaccelerator.enable'))
             ||
-            (extension_loaded('apc') && ini_get('apc.enabled'))
+            (extension_loaded('apc') && Ini::getBool('apc.enabled'))
             ||
-            (extension_loaded('Zend Optimizer+') && ini_get('zend_optimizerplus.enable'))
+            (extension_loaded('Zend Optimizer+') && Ini::getBool('zend_optimizerplus.enable'))
             ||
-            (extension_loaded('Zend OPcache') && ini_get('opcache.enable'))
+            (extension_loaded('Zend OPcache') && Ini::getBool('opcache.enable'))
             ||
-            (extension_loaded('xcache') && ini_get('xcache.cacher'))
+            (extension_loaded('xcache') && Ini::getBool('xcache.cacher'))
             ||
-            (extension_loaded('wincache') && ini_get('wincache.ocenabled'))
+            (extension_loaded('wincache') && Ini::getBool('wincache.ocenabled'))
         ;
 
         $this->addRecommendation(
@@ -337,7 +338,7 @@ final class BoltRequirements extends RequirementCollection
 
         if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
             $this->addRecommendation(
-                $this->getRealpathCacheSize() >= 5 * 1024 * 1024,
+                Ini::getBytes('realpath_cache_size') >= 5 * 1024 * 1024,
                 'realpath_cache_size should be at least 5M in php.ini',
                 'Setting "<strong>realpath_cache_size</strong>" to e.g. "<strong>5242880</strong>" or "<strong>5M</strong>" in php.ini<a href="#phpini">*</a> may improve performance on Windows significantly in some cases.'
             );
@@ -362,34 +363,6 @@ final class BoltRequirements extends RequirementCollection
                 sprintf('PDO should have some drivers installed (currently available: %s)', count($drivers) ? implode(', ', $drivers) : 'none'),
                 'Install <strong>PDO drivers</strong> (mandatory for Doctrine).'
             );
-        }
-    }
-
-    /**
-     * Loads realpath_cache_size from php.ini and converts it to int.
-     *
-     * (e.g. 16k is converted to 16384 int)
-     *
-     * @return int
-     */
-    protected function getRealpathCacheSize()
-    {
-        $size = ini_get('realpath_cache_size');
-        $size = trim($size);
-        $unit = '';
-        if (!ctype_digit($size)) {
-            $unit = strtolower(substr($size, -1, 1));
-            $size = (int) substr($size, 0, -1);
-        }
-        switch ($unit) {
-            case 'g':
-                return $size * 1024 * 1024 * 1024;
-            case 'm':
-                return $size * 1024 * 1024;
-            case 'k':
-                return $size * 1024;
-            default:
-                return (int) $size;
         }
     }
 
