@@ -352,8 +352,6 @@ final class BoltRequirements extends RequirementCollection
 
         $this->addPhpConfigRecommendation('magic_quotes_gpc', false, true);
 
-        $this->addPhpConfigRecommendation('register_globals', false, true);
-
         $this->addPhpConfigRecommendation('session.auto_start', false);
 
         $this->addRecommendation(
