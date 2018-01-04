@@ -24,6 +24,10 @@
         "composer/ca-bundle": "^1.0",
         "symfony/requirements-checker": "^1.0"
     },
+    "require-dev": {
+        "bolt/bolt": "^3.4",
+        "passwordlib/passwordlib": "^1.0@beta"
+    },
     "bin": [
         "bin/bolt-requirements"
     ],
