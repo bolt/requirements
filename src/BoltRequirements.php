@@ -128,41 +128,12 @@ final class BoltRequirements extends RequirementCollection
             );
         }
 
-        $this->addRequirement(
-            function_exists('iconv'),
-            'iconv() must be available',
-            'Install and enable the <strong>iconv</strong> extension.'
-        );
-
-        $this->addRequirement(
-            function_exists('json_encode'),
-            'json_encode() must be available',
-            'Install and enable the <strong>JSON</strong> extension.'
-        );
-
-        $this->addRequirement(
-            function_exists('session_start'),
-            'session_start() must be available',
-            'Install and enable the <strong>session</strong> extension.'
-        );
-
-        $this->addRequirement(
-            function_exists('ctype_alpha'),
-            'ctype_alpha() must be available',
-            'Install and enable the <strong>ctype</strong> extension.'
-        );
-
-        $this->addRequirement(
-            function_exists('token_get_all'),
-            'token_get_all() must be available',
-            'Install and enable the <strong>Tokenizer</strong> extension.'
-        );
-
-        $this->addRequirement(
-            function_exists('simplexml_import_dom'),
-            'simplexml_import_dom() must be available',
-            'Install and enable the <strong>SimpleXML</strong> extension.'
-        );
+        $this->addExtensionRequirement('iconv', 'iconv');
+        $this->addExtensionRequirement('JSON', 'json_encode');
+        $this->addExtensionRequirement('session', 'session_start');
+        $this->addExtensionRequirement('ctype', 'ctype_alpha');
+        $this->addExtensionRequirement('Tokenizer', 'token_get_all');
+        $this->addExtensionRequirement('SimpleXML', 'simplexml_import_dom');
 
         if (function_exists('apc_store') && ini_get('apc.enabled')) {
             $this->addRequirement(
@@ -215,6 +186,15 @@ final class BoltRequirements extends RequirementCollection
                 'Set "<strong>mbstring.func_overload</strong>" to <strong>0</strong> in php.ini<a href="#phpini">*</a> to disable function overloading by the mbstring extension.'
             );
         }
+    }
+
+    protected function addExtensionRequirement($extension, $functionToCheck)
+    {
+        $this->addRequirement(
+            function_exists($functionToCheck),
+            sprintf('%s() must be available', $functionToCheck),
+            sprintf('Install and enable the <strong>%s</strong> extension.', $extension)
+        );
     }
 
     /**
