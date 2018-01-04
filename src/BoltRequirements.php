@@ -69,19 +69,17 @@ final class BoltRequirements extends RequirementCollection
         $installedPhpVersion = phpversion();
         $requiredPhpVersion = $this->getPhpRequiredVersion($paths);
 
-        if (false !== $requiredPhpVersion) {
-            $this->addRequirement(
-                version_compare($installedPhpVersion, $requiredPhpVersion, '>='),
-                sprintf('PHP version must be at least %s (%s installed)', $requiredPhpVersion, $installedPhpVersion),
-                sprintf(
-                    'You are running PHP version "<strong>%s</strong>", but Bolt needs at least PHP "<strong>%s</strong>" to run.
-                Before using Bolt, upgrade your PHP installation, preferably to the latest version.',
-                    $installedPhpVersion,
-                    $requiredPhpVersion
-                ),
-                sprintf('Install PHP %s or newer (installed version is %s)', $requiredPhpVersion, $installedPhpVersion)
-            );
-        }
+        $this->addRequirement(
+            version_compare($installedPhpVersion, $requiredPhpVersion, '>='),
+            sprintf('PHP version must be at least %s (%s installed)', $requiredPhpVersion, $installedPhpVersion),
+            sprintf(
+                'You are running PHP version "<strong>%s</strong>", but Bolt needs at least PHP "<strong>%s</strong>" to run.
+            Before using Bolt, upgrade your PHP installation, preferably to the latest version.',
+                $installedPhpVersion,
+                $requiredPhpVersion
+            ),
+            sprintf('Install PHP %s or newer (installed version is %s)', $requiredPhpVersion, $installedPhpVersion)
+        );
 
         $this->addRequirement(
             is_dir($paths['site'] . '/vendor/composer'),
@@ -112,7 +110,7 @@ final class BoltRequirements extends RequirementCollection
             );
         }
 
-        if (false !== $requiredPhpVersion && version_compare($installedPhpVersion, $requiredPhpVersion, '>=')) {
+        if (version_compare($installedPhpVersion, $requiredPhpVersion, '>=')) {
             $timezones = [];
             foreach (DateTimeZone::listAbbreviations() as $abbreviations) {
                 foreach ($abbreviations as $abbreviation) {
@@ -167,19 +165,11 @@ final class BoltRequirements extends RequirementCollection
         );
 
         if (function_exists('apc_store') && ini_get('apc.enabled')) {
-            if (version_compare($installedPhpVersion, '5.4.0', '>=')) {
-                $this->addRequirement(
-                    version_compare(phpversion('apc'), '3.1.13', '>='),
-                    'APC version must be at least 3.1.13 when using PHP 5.4',
-                    'Upgrade your <strong>APC</strong> extension (3.1.13+).'
-                );
-            } else {
-                $this->addRequirement(
-                    version_compare(phpversion('apc'), '3.0.17', '>='),
-                    'APC version must be at least 3.0.17',
-                    'Upgrade your <strong>APC</strong> extension (3.0.17+).'
-                );
-            }
+            $this->addRequirement(
+                version_compare(phpversion('apc'), '3.1.13', '>='),
+                'APC version must be at least 3.1.13',
+                'Upgrade your <strong>APC</strong> extension (3.1.13+).'
+            );
         }
 
         $this->addPhpConfigRequirement('detect_unicode', false);
@@ -411,25 +401,24 @@ final class BoltRequirements extends RequirementCollection
     }
 
     /**
-     * Defines PHP required version from Bolt version.
+     * Finds the PHP required version from Bolt version.
      *
-     * @return string|false The PHP required version or false if it could not be guessed
+     * @return string
      */
     protected function getPhpRequiredVersion(array $paths)
     {
         if (!file_exists($path = $paths['site'] . '/composer.lock')) {
-            return false;
+            return self::LEGACY_REQUIRED_PHP_VERSION;
         }
 
         $composerLock = json_decode(file_get_contents($path), true);
         foreach ($composerLock['packages'] as $package) {
-            $name = $package['name'];
-            if ('bolt/bolt' === $name) {
+            if ($package['name'] === 'bolt/bolt') {
                 return (int) $package['version'][1] > 3 ? self::REQUIRED_PHP_VERSION : self::LEGACY_REQUIRED_PHP_VERSION;
             }
         }
 
-        return false;
+        return self::LEGACY_REQUIRED_PHP_VERSION;
     }
 
     /**
