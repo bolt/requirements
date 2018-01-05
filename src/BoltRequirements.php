@@ -24,7 +24,7 @@ use Symfony\Requirements\RequirementCollection;
 final class BoltRequirements extends RequirementCollection
 {
     const LEGACY_REQUIRED_PHP_VERSION = '5.5.9';
-    const REQUIRED_PHP_VERSION = '7.0.8';
+    const REQUIRED_PHP_VERSION = '7.1.3';
 
     /** @var string */
     private $boltVersion;
