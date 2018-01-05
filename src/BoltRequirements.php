@@ -2,18 +2,15 @@
 
 namespace Bolt\Requirement;
 
+use Bolt\Bootstrap;
 use Bolt\Configuration\PathResolver;
-use Bolt\Exception\PathResolutionException;
 use Bolt\Version;
 use Collator;
 use Composer\CaBundle\CaBundle;
 use DateTimeZone;
 use PDO;
 use ReflectionExtension;
-use Silex\Application;
-use Symfony\Component\Yaml\Yaml;
 use Symfony\Requirements\RequirementCollection;
-use Webmozart\PathUtil\Path;
 
 /**
  * This class specifies all requirements and optional recommendations that
@@ -30,14 +27,19 @@ final class BoltRequirements extends RequirementCollection
 
     /** @var string */
     private $boltVersion;
+    /** @var string */
+    private $rootPath;
+    /** @var PathResolver|null */
+    private $resolver;
 
     /**
      * Constructor.
      *
-     * @param string      $checkPath
-     * @param string|null $boltVersion
+     * @param string            $checkPath
+     * @param string|null       $boltVersion
+     * @param PathResolver|null $resolver
      */
-    public function __construct($checkPath = __DIR__, $boltVersion = null)
+    public function __construct($checkPath = __DIR__, $boltVersion = null, PathResolver $resolver = null)
     {
         if ($boltVersion === null) {
             if (!class_exists(Version::class, true)) {
@@ -49,25 +51,32 @@ final class BoltRequirements extends RequirementCollection
             }
             $this->boltVersion = Version::forComposer();
         }
+        $this->rootPath = $this->getRootDir($checkPath);
 
-        $paths = $this->determinePaths($checkPath);
-        if (file_exists($paths['site'] . '/vendor/composer')) {
-            require_once $paths['site'] . '/vendor/autoload.php';
+        // Load PathResolver from Bolt Application if it is installed
+        if (class_exists(Bootstrap::class)) {
+            try {
+                $app = Bootstrap::run($this->rootPath);
+                $app->boot();
+                $resolver = $app['path_resolver'];
+            } catch (\Exception $e) {
+                // Ignore path checks if we can't configure a PathResolver.
+            }
         }
 
-        $this->setRequirements($paths);
+        $this->resolver = $resolver;
+
+        $this->setRequirements();
         $this->setRecommendations();
     }
 
     /**
      * Mandatory requirements.
-     *
-     * @param array $paths
      */
-    protected function setRequirements(array $paths)
+    protected function setRequirements()
     {
         $installedPhpVersion = phpversion();
-        $requiredPhpVersion = $this->getPhpRequiredVersion($paths);
+        $requiredPhpVersion = $this->getPhpRequiredVersion();
 
         $this->addRequirement(
             version_compare($installedPhpVersion, $requiredPhpVersion, '>='),
@@ -82,24 +91,30 @@ final class BoltRequirements extends RequirementCollection
         );
 
         $this->addRequirement(
-            is_dir($paths['site'] . '/vendor/composer'),
+            is_dir($this->rootPath . '/vendor/composer'),
             'Vendor libraries must be installed',
             'Vendor libraries are missing. Install composer following instructions from <a href="http://getcomposer.org/">http://getcomposer.org/</a>. ' .
             'Then run "<strong>php composer.phar install</strong>" to install them.'
         );
 
-        $this->addRequirement(
-            is_writable($paths['cache']),
-            sprintf('%s directory must be writable', $paths['cache']),
-            sprintf('Change the permissions of "<strong>%s</strong>" directory so that the web server can write into it.', $paths['cache'])
-        );
-/*
-        $this->addRequirement(
-            is_writable($paths['logs']),
-            'app/logs/ or var/logs/ directory must be writable',
-            'Change the permissions of either "<strong>app/logs/</strong>" or  "<strong>var/logs/</strong>" directory so that the web server can write into it.'
-        );
-*/
+        if ($this->resolver) {
+            $cachePath = $this->resolver->resolve('cache');
+            $this->addRequirement(
+                is_writable($cachePath),
+                sprintf('%s directory must be writable', $cachePath),
+                sprintf('Change the permissions of "<strong>%s</strong>" directory so that the web server can write into it.', $cachePath)
+            );
+
+            if ($this->resolver->raw('logs') !== null) {
+                $logsPath = $this->resolver->resolve('logs');
+                $this->addRequirement(
+                    is_writable($logsPath),
+                    sprintf('%s directory must be writable', $logsPath),
+                    sprintf('Change the permissions of "<strong>%s</strong>" directory so that the web server can write into it.', $logsPath)
+                );
+            }
+        }
+
         if (version_compare($installedPhpVersion, '7.0.0', '<')) {
             $this->addPhpConfigRequirement(
                 'date.timezone',
@@ -383,9 +398,9 @@ final class BoltRequirements extends RequirementCollection
      *
      * @return string
      */
-    protected function getPhpRequiredVersion(array $paths)
+    protected function getPhpRequiredVersion()
     {
-        if (!file_exists($path = $paths['site'] . '/composer.lock')) {
+        if (!file_exists($path = $this->rootPath . '/composer.lock')) {
             return self::LEGACY_REQUIRED_PHP_VERSION;
         }
 
@@ -397,69 +412,6 @@ final class BoltRequirements extends RequirementCollection
         }
 
         return self::LEGACY_REQUIRED_PHP_VERSION;
-    }
-
-    /**
-     * @param string $checkPath
-     *
-     * @return array
-     */
-    private function determinePaths($checkPath)
-    {
-        $rootPath = $this->getRootDir($checkPath);
-
-        $cacheDir = version_compare($this->boltVersion, '3.99999', '>')
-            ? $rootPath . '/var/cache'
-            : $rootPath . '/app/cache'
-        ;
-        $paths = [
-            'site'              => $rootPath,
-            'app'               => $rootPath . '/app',
-            'cache'             => $cacheDir,
-            'config'            => $rootPath . '/app/config',
-            'database'          => $rootPath . '/app/database',
-            'extensions'        => $rootPath . '/extensions',
-            'extensions_config' => $rootPath . '/app/config/extensions',
-            'var'               => $rootPath . '/var',
-            'web'               => $rootPath . '/public',
-            'files'             => $rootPath . '/public/files',
-            'themes'            => $rootPath . '/public/theme',
-            'bolt_assets'       => $rootPath . '/public/bolt-public',
-        ];
-
-        // Doesn't seem to have Bolt installed
-        if (!class_exists(PathResolver::class) || !class_exists(Path::class)) {
-            return $paths;
-        }
-        $rootPath = Path::canonicalize($rootPath);
-        $config['paths'] = [];
-
-        // Read in .bolt.yml or .bolt.php
-        if (file_exists($rootPath . '/.bolt.yml')) {
-            $yaml = Yaml::parse(file_get_contents($rootPath . '/.bolt.yml')) ?: [];
-            $config = array_replace_recursive($config, $yaml);
-        } elseif (file_exists($rootPath . '/.bolt.php')) {
-            $php = include $rootPath . '/.bolt.php';
-        } else {
-            return $paths;
-        }
-        if (isset($php) && is_array($php)) {
-            $config = array_replace_recursive($config, $php);
-        } elseif (isset($php) && $php instanceof Application) {
-            return $paths;
-        }
-
-        // Resolve paths
-        $resolver = new PathResolver($rootPath, $config['paths']);
-        foreach (array_keys($paths) as $key) {
-            try {
-                $paths[$key] = $resolver->resolve("%$key%");
-            } catch (PathResolutionException $e) {
-                // Keep moving
-            }
-        }
-
-        return $paths;
     }
 
     /**
